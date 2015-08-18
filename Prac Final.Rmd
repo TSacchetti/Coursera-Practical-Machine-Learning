@@ -1,0 +1,73 @@
+---
+title: "Practical Machine Learning Classification Assignment"
+author: "Thomas Sacchetti"
+date: "August 18, 2015"
+output: html_document
+---
+#The Assignment
+
+This project examines the data from personal activity monitors, to determine the quality of the exercise being performed. This project examines data taken from 5 different test subjects. Each test subject was asked to perform a lift in one of 5 different ways. While each subject lifted the personal activity monitors mesured the quality of their lift. From these data we were asked to develop a classification algorythm to classify the lifts. 
+
+#The Data
+```{r}
+library(caret)
+library(ggplot2)
+library(doMC)
+library(knitr)
+library(randomForest)
+library(e1071)
+library(rpart)
+library(doParallel)
+registerDoParallel(cores=2)
+trainUrl ="https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testUrl = "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+train.file = "pml-training.csv"
+test.file  = "pml-testing.csv"
+if (!file.exists(train.file)) {
+  download.file(trainUrl, destfile=train.file, method="curl")
+}
+if (!file.exists(test.file)) {
+  download.file(testUrl, destfile=test.file, method="curl")
+}
+trainRaw = read.csv("pml-training.csv")
+testRaw = read.csv("pml-testing.csv")
+
+```
+The above data loads and processes the data. It is also important to note that training the algorythm takes a while and I recommend implementing parallel computing if your computer has the RAM and computing capability to do so.
+#Cleaning the data
+```{r}
+trainRaw = trainRaw[, colSums(is.na(trainRaw)) == 0] 
+testRaw = testRaw[, colSums(is.na(testRaw)) == 0] 
+
+classe = trainRaw$classe
+trainRemove = grepl("^X|timestamp|window", names(trainRaw))
+trainRaw = trainRaw[, !trainRemove]
+trainCleaned = trainRaw[, sapply(trainRaw, is.numeric)]
+trainCleaned$classe = classe
+testRemove = grepl("^X|timestamp|window", names(testRaw))
+testRaw = testRaw[, !testRemove]
+testCleaned = testRaw[, sapply(testRaw, is.numeric)]
+```
+
+The above steps work to remove any issues that exist within the data and remove and blank or unnecsaary columns.
+
+#Preprocessing the Data for the algorythm
+```{r}
+set.seed(12345) # For reproducibile purpose
+inTrain = createDataPartition(trainCleaned$classe, p=0.75, list=F)
+trainData = trainCleaned[inTrain, ]
+testData = trainCleaned[-inTrain, ]
+```
+We now have a training data and test data, we will now run random forrest because it is a great general clasifier. we are parsing the data using cross validaiton in 5 segments. The actual creation of the algorythm here is commented out to make it faster for the markdown file, if you were running this on your own Computer you would need to remove the comments.
+```{r}
+controlRf = trainControl(method="cv", 6)
+modelRf = train(classe ~ ., data=trainData, method="rf", trControl=controlRf, ntree=501)
+```
+
+#Prediction and Results
+```{r}
+predictions <- predict(modelRf, testData)
+confusionMatrix(predictions, testData$classe)
+```
+#Error Analysis
+As we can see from the above chart there was a 99.3% accuracy for the model against the testing set. The rate at which the model creates type 1 errors is less the 1.6% accross every category and the rate at which it creates type 2 errors is less than 1% accross every category. 
